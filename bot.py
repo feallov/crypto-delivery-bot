@@ -1,7 +1,7 @@
 import asyncio, os, sys
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.enums import ParseMode
@@ -10,6 +10,7 @@ import keyboards as kb
 import database as db
 from strings import texts
 
+# загрузка токена
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     sys.exit(1)
@@ -145,5 +146,4 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    from aiogram.filters import StateFilter
     asyncio.run(main())
