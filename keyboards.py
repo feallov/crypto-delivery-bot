@@ -22,3 +22,28 @@ def settings_menu():
     )
     builder.row(InlineKeyboardButton(text="← back", callback_data="start"))
     return builder.as_markup()
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup
+
+def main_menu(lang):
+    # Твоя текущая главная клавиатура, добавляем кнопку выбора рынка
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 market", callback_query_id="view_market")
+    builder.button(text="⚙️ settings", callback_query_id="settings")
+    builder.adjust(1)
+    return builder.as_markup()
+
+def market_menu():
+    builder = InlineKeyboardBuilder()
+    # Список монет: (Название для кнопки, тикер для API)
+    coins = [
+        ("btc", "btc"),
+        ("ton (gram)", "ton"),
+        ("usdt", "usdt")
+    ]
+    for name, ticker in coins:
+        builder.button(text=name, callback_query_data=f"coin_{ticker}")
+    
+    builder.button(text="« back", callback_query_data="start")
+    builder.adjust(2) # Кнопки по 2 в ряд
+    return builder.as_markup()
