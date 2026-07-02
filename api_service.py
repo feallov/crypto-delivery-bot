@@ -3,7 +3,9 @@ import aiohttp
 class BinanceAPI:
     @staticmethod
     async def get_ticker_data(symbol: str):
-        # получаем данные без ключей, напрямую
+        if symbol.lower() == "usdt":
+            return {"symbol": "usdt", "price": 1.00, "change": 0.0, "low": 1.0, "high": 1.0, "vol": 0.0}
+        
         url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol.upper()}USDT"
         async with aiohttp.ClientSession() as session:
             try:
@@ -18,5 +20,5 @@ class BinanceAPI:
                             "low": float(data['lowPrice']),
                             "vol": float(data['quoteVolume'])
                         }
-            except:
-                return None
+            except: pass
+        return None
