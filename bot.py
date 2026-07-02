@@ -96,3 +96,42 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# 1. Изменяем обработчик вызова меню рынка
+@dp.callback_query(F.data == "view_market")
+async def show_market_menu(callback: types.CallbackQuery):
+    user = await db.get_user(callback.from_user.id)
+    # Показываем меню выбора монет
+    await callback.message.edit_text(
+        "<b>select asset:</b>", 
+        reply_markup=kb.market_menu(), 
+        parse_mode=ParseMode.HTML
+    )
+
+# 2. Добавляем обработчик для выбора конкретной монеты
+@dp.callback_query(F.data.startswith("coin_"))
+async def coin_detail(callback: types.CallbackQuery):
+    user = await db.get_user(callback.from_user.id)
+    ticker = callback.data.split("_")[1] # получаем 'btc', 'ton' или 'usdt'
+    
+    data = await BinanceAPI.get_ticker_data(ticker)
+    
+    if data:
+        # Логика статуса цены
+        status = texts[user.lang].get('price_up', '▲') if data['change'] > 0 else texts[user.lang].get('price_down', '▼')
+        
+        # Собираем сообщение (в твоем стиле)
+        res = (
+            f"💎 <b>1 {data['symbol']} = ${data['price']:,.2f}</b> {status} ▲ <b>{data['change']}%</b>\n\n"
+            f"<b>range 24h:</b> <code>{data['low']:,.0f}</code> — <code>{data['high']:,.0f}</code>\n"
+            f"<b>vol 24h:</b> <code>{data['vol']/1000000:.1f}m</code>"
+        ).lower()
+        
+        # Отправляем с кнопкой возврата в маркет-меню
+        await callback.message.edit_text(
+            res, 
+            reply_markup=kb.market_menu(), 
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        await callback.answer("error fetching data")
