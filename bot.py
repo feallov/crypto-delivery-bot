@@ -10,19 +10,16 @@ import keyboards as kb
 from strings import texts
 import database as db
 
+# Загрузка токена
 TOKEN = os.getenv("BOT_TOKEN")
-
-# ПРОВЕРКА: Если токена нет, бот сразу скажет об этом
 if not TOKEN:
-    print("CRITICAL ERROR: BOT_TOKEN is not defined in Environment Variables!")
+    print("ERROR: BOT_TOKEN not found!")
     sys.exit(1)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# [Остальной код бота без изменений...]
-# ... (скопируй всё, что было в bot.py из прошлого сообщения ниже) ...
-
+# Веб-сервер для Render (порт 10000)
 async def handle(request):
     return web.Response(text="bot is alive")
 
@@ -34,6 +31,7 @@ async def start_webserver():
     site = web.TCPSite(runner, '0.0.0.0', 10000)
     await site.start()
 
+# Обработчики
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user = await db.get_user(message.from_user.id)
@@ -68,6 +66,7 @@ async def set_lang(callback: types.CallbackQuery):
     await callback.answer(texts[lang]['lang_set'])
     await back_home(callback)
 
+# Микро-спам (фоновый мониторинг)
 async def price_monitor():
     last_price = 0
     while True:
@@ -75,23 +74,24 @@ async def price_monitor():
             data = await BinanceAPI.get_ticker_data("btc")
             if data and last_price != 0:
                 diff = abs(data['price'] - last_price) / last_price
-                if diff > 0.01:
+                if diff > 0.01: # 1% изменение
+                    # Тут можно добавить логику рассылки всем юзерам
                     last_price = data['price']
             elif data:
                 last_price = data['price']
-        except: pass
+        except:
+            pass
         await asyncio.sleep(60)
 
 async def main():
-    # Проверка базы данных перед стартом
     if not os.getenv("DATABASE_URL"):
-        print("Bot is stopping because DATABASE_URL is missing.")
-        return 
-
+        print("ERROR: DATABASE_URL not found!")
+        return
+    
     await db.init_db()
     asyncio.create_task(start_webserver())
     asyncio.create_task(price_monitor())
-    print("--- BOT IS READY ---")
+    print("--- BOT STARTED ---")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
