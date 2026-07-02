@@ -3,11 +3,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def main_menu(lang):
     builder = InlineKeyboardBuilder()
-    # Текст на кнопках маленькими буквами
     m_text = "◌ market" if lang == 'en' else "◌ маркет"
     a_text = "✧ alerts" if lang == 'en' else "✧ уведомления"
     s_text = "⚙ settings" if lang == 'en' else "⚙ настройки"
-    
     builder.row(InlineKeyboardButton(text=m_text, callback_data="view_market"))
     builder.row(InlineKeyboardButton(text=a_text, callback_data="manage_alerts"))
     builder.row(InlineKeyboardButton(text=s_text, callback_data="settings"))
@@ -15,11 +13,9 @@ def main_menu(lang):
 
 def coin_list_kb(prefix: str, lang='en'):
     builder = InlineKeyboardBuilder()
-    # 15 монет, все тикеры маленькими
     coins = ["btc", "eth", "ton", "sol", "bnb", "xrp", "doge", "ada", "trx", "avax", "dot", "link", "ltc", "matic", "usdt"]
     for c in coins:
         builder.button(text=f"• {c}", callback_data=f"{prefix}_{c}")
-    
     back_text = "← back" if lang == 'en' else "← назад"
     builder.button(text=back_text, callback_data="start")
     builder.adjust(3)
