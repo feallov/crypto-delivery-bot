@@ -10,10 +10,8 @@ import keyboards as kb
 import database as db
 from strings import texts
 
-# загрузка токена
 TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    sys.exit(1)
+if not TOKEN: sys.exit(1)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -26,7 +24,7 @@ class AlertSetup(StatesGroup):
 def style(text):
     return f"<b>{str(text).lower()}</b>"
 
-# --- веб-сервер для render ---
+# --- веб-сервер ---
 async def handle(request):
     return web.Response(text="bot is alive")
 
@@ -41,12 +39,14 @@ async def start_webserver():
 
 # --- обработчики ---
 @dp.message(Command("start"))
-async def start(m: types.Message):
+async def start(m: types.Message, state: FSMContext):
+    await state.clear()
     user = await db.get_user(m.from_user.id)
     await m.answer(style(texts[user.lang]['welcome']), reply_markup=kb.main_menu(user.lang), parse_mode=ParseMode.HTML)
 
 @dp.callback_query(F.data == "start")
-async def back_home(call: types.CallbackQuery):
+async def back_home(call: types.CallbackQuery, state: FSMContext):
+    await state.clear()
     user = await db.get_user(call.from_user.id)
     await call.message.edit_text(style(texts[user.lang]['welcome']), reply_markup=kb.main_menu(user.lang), parse_mode=ParseMode.HTML)
 
@@ -59,11 +59,14 @@ async def market(call: types.CallbackQuery):
 async def coin_info(call: types.CallbackQuery):
     user = await db.get_user(call.from_user.id)
     coin = call.data.split("_")[1]
+    await call.answer(style(f"loading {coin}..."))
     data = await BinanceAPI.get_ticker_data(coin)
     if data:
         status = texts[user.lang]['price_up'] if data['change'] > 0 else texts[user.lang]['price_down']
         res = style(f"💎 1 {data['symbol']} = ${data['price']:,.2f} {status}\n24h: {data['change']}%")
         await call.message.edit_text(res, reply_markup=kb.main_menu(user.lang), parse_mode=ParseMode.HTML)
+    else:
+        await call.answer(style("error fetching price"))
 
 @dp.callback_query(F.data == "manage_alerts")
 async def start_alert_setup(call: types.CallbackQuery, state: FSMContext):
@@ -76,29 +79,37 @@ async def alert_coin_chosen(call: types.CallbackQuery, state: FSMContext):
     coin = call.data.split("_")[1]
     await state.update_data(coin=coin)
     data = await BinanceAPI.get_ticker_data(coin)
-    await call.message.edit_text(style(f"current {coin} price: ${data['price']}\n\nenter target price:"), parse_mode=ParseMode.HTML)
-    await state.set_state(AlertSetup.entering_price)
+    if data:
+        await call.message.edit_text(style(f"current {coin} price: ${data['price']:,.2f}\n\nenter target price:"), parse_mode=ParseMode.HTML)
+        await state.set_state(AlertSetup.entering_price)
+    else:
+        await call.answer(style("error"))
 
-@dp.message(StateFilter(AlertSetup.entering_price))
+@dp.message(AlertSetup.entering_price)
 async def alert_price_entered(m: types.Message, state: FSMContext):
     try:
-        price = float(m.text.replace(',', '.'))
+        price_str = m.text.replace(',', '.')
+        price = float(price_str)
         await state.update_data(price=price)
         await m.answer(style("how many times to spam? (1-10):"), parse_mode=ParseMode.HTML)
         await state.set_state(AlertSetup.entering_spam)
     except:
-        await m.answer(style("enter a valid number"))
+        await m.answer(style("enter a valid number (e.g. 65000.50)"))
 
-@dp.message(StateFilter(AlertSetup.entering_spam))
+@dp.message(AlertSetup.entering_spam)
 async def alert_spam_entered(m: types.Message, state: FSMContext):
     try:
         spam = int(m.text)
         if not 1 <= spam <= 10: raise ValueError()
         data = await state.get_data()
         coin_data = await BinanceAPI.get_ticker_data(data['coin'])
+        if not coin_data: 
+            await m.answer(style("error connection"))
+            return
+        
         direction = "up" if data['price'] > coin_data['price'] else "down"
         await db.add_alert(m.from_user.id, data['coin'], data['price'], direction, spam)
-        await m.answer(style(f"alert set!\n{data['coin']} {direction} to {data['price']}\nspam: {spam} times"), parse_mode=ParseMode.HTML)
+        await m.answer(style(f"alert set!\n{data['coin']} {direction} to {data['price']:,.2f}\nspam: {spam} times"), parse_mode=ParseMode.HTML)
         await state.clear()
     except:
         await m.answer(style("enter a number between 1 and 10"))
@@ -111,7 +122,7 @@ async def show_settings(call: types.CallbackQuery):
 async def set_lang(call: types.CallbackQuery):
     lang = call.data.split("_")[1]
     await db.update_user(call.from_user.id, lang=lang)
-    await call.answer(texts[lang]['lang_set'])
+    await call.answer(style(texts[lang]['lang_set']))
     user = await db.get_user(call.from_user.id)
     await call.message.edit_text(style(texts[user.lang]['welcome']), reply_markup=kb.main_menu(user.lang), parse_mode=ParseMode.HTML)
 
@@ -127,11 +138,11 @@ async def alert_monitor():
                 if a.direction == "up" and data['price'] >= a.target_price: triggered = True
                 elif a.direction == "down" and data['price'] <= a.target_price: triggered = True
                 if triggered:
-                    msg = style(f"⚠️ {a.symbol} target hit!\nprice: ${data['price']}")
+                    msg = style(f"⚠️ {a.symbol} target hit!\nprice: ${data['price']:,.2f}")
                     for _ in range(a.spam_count):
                         try:
                             await bot.send_message(a.user_id, msg, parse_mode=ParseMode.HTML)
-                            await asyncio.sleep(0.3)
+                            await asyncio.sleep(0.4)
                         except: break
                     await db.deactivate_alert(a.id)
         except: pass
@@ -139,8 +150,7 @@ async def alert_monitor():
 
 async def main():
     await start_webserver()
-    try:
-        await db.init_db()
+    try: await db.init_db()
     except: pass
     asyncio.create_task(alert_monitor())
     await dp.start_polling(bot)
